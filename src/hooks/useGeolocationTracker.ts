@@ -13,6 +13,19 @@ const GEO_OPTIONS: PositionOptions = {
   maximumAge: 0,
 };
 
+/**
+ * Minimum distance (metres) a new point must be from the last recorded point
+ * before it's added to the route. Filters out GPS drift while standing still.
+ * Set relative to typical GPS accuracy (~5m indoors, ~3m outdoors).
+ */
+const MIN_DISTANCE_M = 5;
+
+/**
+ * Maximum acceptable accuracy radius (metres).
+ * Points with accuracy worse than this are discarded entirely.
+ */
+const MAX_ACCURACY_M = 40;
+
 function geoErrorCode(code: number): GeoError {
   switch (code) {
     case GeolocationPositionError.PERMISSION_DENIED:
@@ -85,6 +98,10 @@ export function useGeolocationTracker() {
   const handlePosition = useCallback((pos: GeolocationPosition) => {
     if (statusRef.current !== "tracking") return;
 
+    // ── Accuracy filter: discard noisy fixes ──────────────────────────────
+    const accuracy = pos.coords.accuracy;
+    if (accuracy !== null && accuracy > MAX_ACCURACY_M) return;
+
     const point: RoutePoint = {
       lat: pos.coords.latitude,
       lng: pos.coords.longitude,
@@ -95,6 +112,16 @@ export function useGeolocationTracker() {
     };
 
     setState((prev) => {
+      // ── Distance filter: skip if too close to last point (GPS drift) ────
+      if (prev.points.length > 0) {
+        const last = prev.points[prev.points.length - 1];
+        const dist = haversineDistance(last, point);
+        if (dist < MIN_DISTANCE_M) {
+          // Still update currentPosition for the marker, but don't add to route
+          return { ...prev, currentPosition: point };
+        }
+      }
+
       const newPoints = [...prev.points, point];
       let newDistance = prev.totalDistance;
       if (prev.points.length > 0) {
