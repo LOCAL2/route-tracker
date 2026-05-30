@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback, useState } from "react";
 import { Map, MapRoute, MapMarker, MarkerContent, useMap, type MapRef } from "@/components/ui/map";
 import type { RoutePoint, TrackingStatus } from "@/types/tracking";
 import { Layers, Info } from "lucide-react";
+import { useDeviceHeading } from "@/hooks/useDeviceHeading";
 
 // ── Map style definitions ────────────────────────────────────────────────────
 
@@ -110,6 +111,7 @@ interface MapViewProps {
   points: RoutePoint[];
   currentPosition: RoutePoint | null;
   status: TrackingStatus;
+  heading: number | null;
 }
 
 interface MapInnerProps extends MapViewProps {
@@ -118,7 +120,7 @@ interface MapInnerProps extends MapViewProps {
   styleKey: MapStyleKey;
 }
 
-function MapInner({ points, currentPosition, status, hasFlownRef, mapRef, styleKey }: MapInnerProps) {
+function MapInner({ points, currentPosition, status, heading, hasFlownRef, mapRef, styleKey }: MapInnerProps) {
   const { map, isLoaded } = useMap();
 
   // Keep mapRef in sync for external access (pitch control)
@@ -298,15 +300,42 @@ function MapInner({ points, currentPosition, status, hasFlownRef, mapRef, styleK
         </MapMarker>
       )}
 
-      {/* Current position — red dot, pulse only while tracking */}
+      {/* Current position — dot + heading cone */}
       {currentPosition && (
         <MapMarker longitude={currentPosition.lng} latitude={currentPosition.lat}>
           <MarkerContent>
-            <div className="relative flex items-center justify-center">
+            <div className="relative flex items-center justify-center w-10 h-10">
+              {/* Pulse ring while tracking */}
               {status === "tracking" && (
-                <div className="absolute w-8 h-8 rounded-full bg-red-500/30 location-marker-pulse" />
+                <div className="absolute w-10 h-10 rounded-full bg-red-500/20 location-marker-pulse" />
               )}
-              <div className="w-4 h-4 rounded-full bg-red-500 border-2 border-white shadow-lg shadow-red-500/50 z-10" />
+
+              {/* Heading cone — only when heading is available */}
+              {heading !== null && (
+                <div
+                  className="absolute inset-0 flex items-center justify-center"
+                  style={{ transform: `rotate(${heading}deg)` }}
+                >
+                  {/* Cone pointing up (north = 0°) */}
+                  <svg
+                    width="40"
+                    height="40"
+                    viewBox="0 0 40 40"
+                    className="absolute"
+                    aria-hidden="true"
+                  >
+                    {/* Cone shape: triangle pointing up from center */}
+                    <path
+                      d="M20 20 L14 6 Q20 2 26 6 Z"
+                      fill="#ef4444"
+                      fillOpacity="0.55"
+                    />
+                  </svg>
+                </div>
+              )}
+
+              {/* Center dot */}
+              <div className="w-4 h-4 rounded-full bg-red-500 border-2 border-white shadow-lg shadow-red-500/50 z-10 flex-shrink-0" />
             </div>
           </MarkerContent>
         </MapMarker>
@@ -326,6 +355,7 @@ interface MapViewFullProps extends MapViewProps {
 export function MapView({ points, currentPosition, status, styleToggleSlot, styleKey }: MapViewFullProps) {
   const hasFlownRef = useRef(false);
   const mapRef = useRef<MapRef | null>(null);
+  const heading = useDeviceHeading();
 
   // Reset fly flag on new run (idle) or when locate fires fresh
   useEffect(() => {
@@ -351,6 +381,7 @@ export function MapView({ points, currentPosition, status, styleToggleSlot, styl
           points={points}
           currentPosition={currentPosition}
           status={status}
+          heading={heading}
           hasFlownRef={hasFlownRef}
           mapRef={mapRef}
           styleKey={styleKey}
