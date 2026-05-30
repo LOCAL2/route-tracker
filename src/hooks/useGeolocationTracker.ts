@@ -15,16 +15,22 @@ const GEO_OPTIONS: PositionOptions = {
 
 /**
  * Minimum distance (metres) a new point must be from the last recorded point
- * before it's added to the route. Filters out GPS drift while standing still.
- * Set relative to typical GPS accuracy (~5m indoors, ~3m outdoors).
+ * before it's added to the route.
  */
-const MIN_DISTANCE_M = 5;
+const MIN_DISTANCE_M = 8;
 
 /**
  * Maximum acceptable accuracy radius (metres).
  * Points with accuracy worse than this are discarded entirely.
  */
-const MAX_ACCURACY_M = 40;
+const MAX_ACCURACY_M = 35;
+
+/**
+ * Minimum speed (m/s) from GPS to consider the user actually moving.
+ * ~0.5 m/s = ~1.8 km/h (slow walk). Below this = treat as stationary.
+ * Only applied when the GPS actually reports a speed value.
+ */
+const MIN_SPEED_MS = 0.5;
 
 function geoErrorCode(code: number): GeoError {
   switch (code) {
@@ -98,9 +104,25 @@ export function useGeolocationTracker() {
   const handlePosition = useCallback((pos: GeolocationPosition) => {
     if (statusRef.current !== "tracking") return;
 
-    // ── Accuracy filter: discard noisy fixes ──────────────────────────────
+    // ── 1. Accuracy filter: discard noisy fixes ───────────────────────────
     const accuracy = pos.coords.accuracy;
     if (accuracy !== null && accuracy > MAX_ACCURACY_M) return;
+
+    // ── 2. Speed filter: if GPS reports speed, skip when stationary ───────
+    const gpsSpeed = pos.coords.speed; // m/s or null
+    if (gpsSpeed !== null && gpsSpeed !== undefined && gpsSpeed < MIN_SPEED_MS) {
+      // User is stationary — update marker but don't record point
+      const stationaryPoint: RoutePoint = {
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude,
+        timestamp: pos.timestamp,
+        accuracy: pos.coords.accuracy,
+        speed: pos.coords.speed,
+        altitude: pos.coords.altitude,
+      };
+      setState((prev) => ({ ...prev, currentPosition: stationaryPoint }));
+      return;
+    }
 
     const point: RoutePoint = {
       lat: pos.coords.latitude,
@@ -112,12 +134,11 @@ export function useGeolocationTracker() {
     };
 
     setState((prev) => {
-      // ── Distance filter: skip if too close to last point (GPS drift) ────
+      // ── 3. Distance filter: skip if too close to last point (GPS drift) ──
       if (prev.points.length > 0) {
         const last = prev.points[prev.points.length - 1];
         const dist = haversineDistance(last, point);
         if (dist < MIN_DISTANCE_M) {
-          // Still update currentPosition for the marker, but don't add to route
           return { ...prev, currentPosition: point };
         }
       }
