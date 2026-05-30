@@ -346,8 +346,10 @@ function MapInner({ points, currentPosition, status, heading, hasFlownRef, mapRe
 
 // ── Public MapView ────────────────────────────────────────────────────────────
 
-interface MapViewFullProps extends MapViewProps {
-  /** Slot for the style toggle — rendered inside the map container */
+interface MapViewFullProps {
+  points: RoutePoint[];
+  currentPosition: RoutePoint | null;
+  status: TrackingStatus;
   styleToggleSlot?: React.ReactNode;
   styleKey: MapStyleKey;
 }
