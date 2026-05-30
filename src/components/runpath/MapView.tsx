@@ -5,7 +5,9 @@ import { Layers, Info } from "lucide-react";
 
 // ── Map style definitions ────────────────────────────────────────────────────
 
-export type MapStyleKey = "carto-dark" | "osm-3d";
+export type MapStyleKey = "carto-dark" | "osm-3d" | "maptiler-3d";
+
+const MAPTILER_KEY = "ZZR0gxObw7vxzm5me3pW";
 
 const MAP_STYLES: Record<MapStyleKey, { label: string; dark: string; light: string; is3D: boolean }> = {
   "carto-dark": {
@@ -14,8 +16,14 @@ const MAP_STYLES: Record<MapStyleKey, { label: string; dark: string; light: stri
     light: "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
     is3D: false,
   },
-  "osm-3d": {
+  "maptiler-3d": {
     label: "3D",
+    dark: `https://api.maptiler.com/maps/streets-v2-dark/style.json?key=${MAPTILER_KEY}`,
+    light: `https://api.maptiler.com/maps/streets-v2-dark/style.json?key=${MAPTILER_KEY}`,
+    is3D: true,
+  },
+  "osm-3d": {
+    label: "OSM",
     dark: "https://tiles.openfreemap.org/styles/liberty",
     light: "https://tiles.openfreemap.org/styles/liberty",
     is3D: true,
@@ -55,7 +63,7 @@ function StyleToggle({ current, onChange }: StyleToggleProps) {
           </button>
         ))}
 
-        {/* Info button — only visible when 3D is active */}
+        {/* Info button — only visible when osm-3d is active */}
         {current === "osm-3d" && (
           <button
             type="button"
@@ -68,7 +76,7 @@ function StyleToggle({ current, onChange }: StyleToggleProps) {
         )}
       </div>
 
-      {/* Info tooltip — shown below the toggle when info is open */}
+      {/* OSM 3D info tooltip */}
       {current === "osm-3d" && showInfo && (
         <div className="bg-gray-900/95 backdrop-blur-md border border-gray-700/60 rounded-xl shadow-xl px-3 py-2.5 max-w-[220px]">
           <p className="text-gray-200 text-xs font-semibold mb-1 flex items-center gap-1.5">
@@ -80,6 +88,16 @@ function StyleToggle({ current, onChange }: StyleToggleProps) {
             <span className="text-gray-300 font-medium">OpenStreetMap</span>{" "}
             ในพื้นที่นั้น บางเมืองอาจยังไม่มีข้อมูล 3D
           </p>
+        </div>
+      )}
+
+      {/* Maptiler badge */}
+      {current === "maptiler-3d" && (
+        <div className="bg-gray-900/90 backdrop-blur-md border border-gray-700/60 rounded-lg shadow-xl px-2.5 py-1.5 flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0" />
+          <span className="text-gray-400 text-[10px]">
+            Powered by <span className="text-gray-200 font-medium">Maptiler</span>
+          </span>
         </div>
       )}
     </div>
@@ -113,6 +131,89 @@ function MapInner({ points, currentPosition, status, hasFlownRef, mapRef, styleK
     if (!map || !isLoaded) return;
     const target = MAP_STYLES[styleKey].is3D ? 55 : 0;
     map.easeTo({ pitch: target, duration: 600 });
+  }, [map, isLoaded, styleKey]);
+
+  // ── Add 3D building extrusion for Maptiler style ──────────────────────────
+  useEffect(() => {
+    if (!map || !isLoaded) return;
+    if (styleKey !== "maptiler-3d") return;
+
+    const t = setTimeout(() => {
+      try {
+        if (map.getLayer("3d-buildings")) return;
+
+        const style = map.getStyle();
+        if (!style) return;
+
+        // Auto-detect the source that contains a "building" source-layer
+        let buildingSource: string | null = null;
+        for (const layer of style.layers ?? []) {
+          if (
+            "source-layer" in layer &&
+            layer["source-layer"] === "building" &&
+            layer.source
+          ) {
+            buildingSource = layer.source as string;
+            break;
+          }
+        }
+        if (!buildingSource) {
+          console.warn("RunPath: could not find building source in style");
+          return;
+        }
+
+        // Insert below the first symbol layer that has a text-field (labels)
+        const labelLayer = style.layers?.find(
+          (l) =>
+            l.type === "symbol" &&
+            "layout" in l &&
+            (l as { layout?: { "text-field"?: unknown } }).layout?.["text-field"]
+        );
+        const beforeId = labelLayer?.id;
+
+        map.addLayer(
+          {
+            id: "3d-buildings",
+            source: buildingSource,
+            "source-layer": "building",
+            filter: ["!", ["to-boolean", ["get", "hide_3d"]]],
+            type: "fill-extrusion",
+            minzoom: 13,
+            paint: {
+              "fill-extrusion-color": [
+                "interpolate", ["linear"], ["get", "render_height"],
+                0,   "#1a2744",
+                30,  "#1e3a5f",
+                80,  "#243b55",
+                200, "#2d4a6b",
+              ],
+              "fill-extrusion-height": [
+                "interpolate", ["linear"], ["zoom"],
+                13, 0,
+                16, ["get", "render_height"],
+              ],
+              "fill-extrusion-base": [
+                "case",
+                [">=", ["zoom"], 16],
+                ["get", "render_min_height"],
+                0,
+              ],
+              "fill-extrusion-opacity": 0.9,
+            },
+          },
+          beforeId
+        );
+      } catch (e) {
+        console.warn("3d-buildings layer error:", e);
+      }
+    }, 400);
+
+    return () => {
+      clearTimeout(t);
+      try {
+        if (map.getLayer("3d-buildings")) map.removeLayer("3d-buildings");
+      } catch { /* ignore */ }
+    };
   }, [map, isLoaded, styleKey]);
 
   // ── First GPS fix: fly in smoothly ────────────────────────────────────────

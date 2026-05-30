@@ -41,6 +41,19 @@ body,
   font-size: 10px;
 }
 
+/* MapLibre attribution — keep legally required but make it subtle */
+.maplibregl-ctrl-attrib {
+  font-size: 9px !important;
+  opacity: 0.45;
+  transition: opacity 0.2s;
+}
+.maplibregl-ctrl-attrib:hover {
+  opacity: 1;
+}
+.maplibregl-ctrl-attrib a {
+  color: #9ca3af !important;
+}
+
 /* Shift zoom controls up on mobile so they don't overlap the bottom sheet */
 @media (max-width: 767px) {
   .maplibregl-ctrl-bottom-right {
