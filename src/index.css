@@ -1,0 +1,72 @@
+@import "tailwindcss";
+@import "maplibre-gl/dist/maplibre-gl.css";
+
+@theme {
+  --font-sans: "Barlow", system-ui, sans-serif;
+  --font-heading: "Barlow Condensed", system-ui, sans-serif;
+
+  --color-brand-orange: #f97316;
+  --color-brand-orange-light: #fb923c;
+  --color-brand-green: #22c55e;
+  --color-brand-dark: #1f2937;
+  --color-brand-darker: #111827;
+
+  /* Extra-small breakpoint for very narrow phones */
+  --breakpoint-xs: 400px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  height: 100dvh;
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-sans);
+  background: #111827;
+  color: #f8fafc;
+  overscroll-behavior: none;
+}
+
+/* MapLibre overrides */
+.maplibregl-map {
+  font-family: var(--font-sans);
+}
+
+.maplibregl-ctrl-attrib {
+  font-size: 10px;
+}
+
+/* Shift zoom controls up on mobile so they don't overlap the bottom sheet */
+@media (max-width: 767px) {
+  .maplibregl-ctrl-bottom-right {
+    bottom: 168px;
+    right: 4px;
+  }
+}
+
+/* Custom marker pulse animation */
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.8);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+
+.location-marker-pulse {
+  animation: pulse-ring 1.5s ease-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .location-marker-pulse {
+    animation: none;
+  }
+}
